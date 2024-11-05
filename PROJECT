@@ -7,4 +7,14 @@ layout:
 - go.kubebuilder.io/v4
 projectName: backup-scheduler
 repo: github.com/abdurrehman107/backup-scheduler
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: backupscheduler.io
+  group: batch
+  kind: CronJob
+  path: github.com/abdurrehman107/backup-scheduler/api/v1
+  version: v1
 version: "3"
