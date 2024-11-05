@@ -81,17 +81,42 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return false, ""
 	}
 	getScheduledTimeForJob := func (job *kbatch.Job) (*time.Time, error) {
-		timeRaw := job.Annotations[scheuduledTimeAnnotation]
+		timeRaw := job.Annotations[scheduledTimeAnnotation]
 		if len(timeRaw) == 0 {
 			return nil, nil
 		}
 		timeParsed, err := time.Parse(time.RFC1123, timeRaw)
 		if err != nil {
-			return err, nil 
+			return nil, err 
 		}
 		return &timeParsed, nil
 	}
-	
+	for _, job := range childJobs.Items {
+		_, finishedType := isJobFinished(&job)
+		switch finishedType {
+		case "":
+			activeJobs = append(activeJobs, &job)
+		case kbatch.JobFailed:
+			failedJobs = append(failedJobs, &job)
+		case kbatch.JobComplete:
+			successfulJobs = append(successfulJobs, &job)
+		}
+		scheudledTimeForJob, err := getScheduledTimeForJob(&job)
+		if err != nil {
+			log.Error(err, "unable to get scheudled time for job")
+			continue
+		}
+		if scheudledTimeForJob != nil {
+			if mostRecentTime == nil || mostRecentTime.Before(*scheudledTimeForJob) {
+				mostRecentTime = scheudledTimeForJob
+			}
+		}
+	}
+	if mostRecentTime != nil {
+		my_job.Status.LastScheduledTime := &metav1.Time{Time: &mostRecentTime}
+	} else {
+		my_job.Status.LastScheduledTime := nil
+	}
 
 
 

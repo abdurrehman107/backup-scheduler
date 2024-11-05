@@ -36,6 +36,7 @@ type CronJobSpec struct {
 type CronJobStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	LastScheduledTime 
 }
 
 // +kubebuilder:object:root=true
