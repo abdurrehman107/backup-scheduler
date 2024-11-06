@@ -17,7 +17,9 @@ limitations under the License.
 package v1
 
 import (
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kbatch "k8s.io/api/batch/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -29,14 +31,16 @@ type CronJobSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of CronJob. Edit cronjob_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	FailedJobHistory []*kbatch.Job
+	Suspend          *bool
 }
 
 // CronJobStatus defines the observed state of CronJob.
 type CronJobStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	LastScheduledTime 
+	LastScheduledTime *metav1.Time
+	Active            []v1.ObjectReference
 }
 
 // +kubebuilder:object:root=true

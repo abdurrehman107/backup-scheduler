@@ -18,10 +18,13 @@ package controller
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	kbatch "k8s.io/api/batch/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	ref "k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -57,9 +60,10 @@ var (
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
 func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	var my_job batchv1.CronJob
-	if err := r.Get(ctx, req.NamespacedName, &my_job); err != nil {
+	var myCronJob batchv1.CronJob
+	if err := r.Get(ctx, req.NamespacedName, &myCronJob); err != nil {
 		log.Error(err, "unable to fetch cronJob")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	// List all jobs 
 	var childJobs kbatch.JobList
@@ -80,6 +84,7 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		return false, ""
 	}
+	// Parse the scheduledTimeAnnotation and fetch the scheduled time 
 	getScheduledTimeForJob := func (job *kbatch.Job) (*time.Time, error) {
 		timeRaw := job.Annotations[scheduledTimeAnnotation]
 		if len(timeRaw) == 0 {
@@ -113,13 +118,46 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 	if mostRecentTime != nil {
-		my_job.Status.LastScheduledTime := &metav1.Time{Time: &mostRecentTime}
+		myCronJob.Status.LastScheduledTime = &metav1.Time{Time: *mostRecentTime}
 	} else {
-		my_job.Status.LastScheduledTime := nil
+		myCronJob.Status.LastScheduledTime = nil
+	}
+	myCronJob.Status.Active = nil 
+	for _, activeJob := range activeJobs {
+		jobRef, err := ref.GetReference(r.Scheme, activeJob)
+		if err != nil {
+			log.Error(err, "unable to get reference")
+			continue
+		}
+		myCronJob.Status.Active = append(myCronJob.Status.Active, *jobRef)
 	}
 
+	log.V(1).Info("job count", "active jobs", len(activeJobs), "successful jobs", len(successfulJobs), "failed jobs", len(failedJobs))
 
-
+	if err := r.Status().Update(ctx, &myCronJob); err != nil {
+		log.Error(err, "Unable to update CronJob status")
+		return ctrl.Result{}, err
+	}
+	// Clean up old jobs according to the history limit
+	
+		// if myCronJob.Spec.FailedJobHistory != nil {
+		// 	sort.Slice(failedJobs, func(i, j int) bool {
+		// 		if failedJobs[i].Status.StartTime == nil {
+		// 			return failedJobs[j].Status.StartTime != nil
+		// 		}
+		// 		return failedJobs[i].Status.StartTime.Before(failedJobs[j].Status.StartTime)
+		// 	})
+		// }
+	// Check if job is suspended 
+	if myCronJob.Spec.Suspend != nil && *myCronJob.Spec.Suspend {
+		log.V(1).Info("job is suspended")
+		return ctrl.Result{}, nil
+	}
+	// Get the next scheduled run 
+	getNextScheduledRun := func(cronJob *batchv1.CronJob, now time.Time) (lastMissed time.Time, next time.Time, error) {
+		cronJob.ObjectMeta
+	}
+	
 	return ctrl.Result{}, nil
 }
 
